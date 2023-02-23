@@ -4,22 +4,43 @@
 
 /* Implementation of class "MessageQueue" */
 
-/* 
+
 template <typename T>
 T MessageQueue<T>::receive()
 {
-    // FP.5a : The method receive should use std::unique_lock<std::mutex> and _condition.wait() 
+    // FP.5a : The method receive should use std::unique_lock<std::mutex> and 
+    //_condition.wait() 
     // to wait for and receive new messages and pull them from the queue using move semantics. 
-    // The received object should then be returned by the receive function. 
+    // The received object should then be returned by the receive function.
+    
+    // Lock _queue for this thread 
+    // use unique lock here for condition_variable wait function
+    std::unique_lock<std::mutex> uLock(_mutex);
+    // start a wait condition for this thread
+    _condition.wait(uLock, [this]{return !_queue.empty(); });
+    //  retrieve last element from queue
+    T msg = std::move(_queue.back());
+    // remove last element from queue
+    _queue.pop_back();
+    // return received message
+    return msg;
+    // lock is released out of scope
 }
 
 template <typename T>
 void MessageQueue<T>::send(T &&msg)
 {
     // FP.4a : The method send should use the mechanisms std::lock_guard<std::mutex> 
-    // as well as _condition.notify_one() to add a new message to the queue and afterwards send a notification.
+    // as well as _condition.notify_one() to 
+    // add a new message to the queue and afterwards send a notification.
+    // lock guard 
+    std::lock_guard<std::mutex> uLock(_mutex);
+    // push this message to queue, use std::move since msg is rvalue
+    _queue.push_back(std::move(msg));
+    // notify _condition_variable to release wait
+    _condition.notify_one();
 }
-*/
+
 
 /* Implementation of class "TrafficLight" */
 
@@ -46,8 +67,7 @@ void TrafficLight::simulate()
     // FP.2b : Finally, the private method „cycleThroughPhases“ should be started in a 
     // thread when the public method „simulate“ is called. 
     // To do this, use the thread queue in the base class.
-    std::thread t = std::thread(&TrafficLight::cycleThroughPhases, this);
-    threads.emplace_back(t);  
+    threads.emplace_back(std::thread(&TrafficLight::cycleThroughPhases, this));  
 }
 
 // virtual function which is executed in a thread
@@ -67,8 +87,10 @@ void TrafficLight::cycleThroughPhases()
         counter++;
         if(counter == waitForPhase){
             _currentPhase = (_currentPhase == TrafficLightPhase::red) ? TrafficLightPhase::green : TrafficLightPhase::red;
+            counter = 0;
             // TODO: 
             // send update method to message queue
+            
         }
     } 
 }
